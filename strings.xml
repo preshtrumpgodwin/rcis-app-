@@ -1,0 +1,73 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '1'
+def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.0'
+
+android {
+    namespace "com.rcis.app"
+    compileSdk 34
+    ndkVersion flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        applicationId "com.rcis.app"
+        // Unisoc T7250 (Itel City 100) needs minSdk 21, targets Android 14
+        minSdkVersion 21
+        targetSdkVersion 34
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
+        multiDexEnabled true
+
+        // Custom APK output filename → starts with RCIS
+        archivesBaseName = "RCIS-v${flutterVersionName}"
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+            // Keep both false — ProGuard can break WebView on Unisoc chipsets
+            minifyEnabled false
+            shrinkResources false
+        }
+    }
+
+    // Build a single universal FAT APK that works on ALL architectures
+    // This is important for Unisoc/MediaTek devices that reject split APKs
+    splits {
+        abi {
+            enable false   // disabled = produces one fat APK compatible with all CPUs
+        }
+    }
+}
+
+flutter {
+    source '../..'
+}
+
+dependencies {
+    implementation 'androidx.multidex:multidex:2.0.1'
+}

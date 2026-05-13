@@ -1,0 +1,301 @@
+# RCIS App — Complete Build Guide
+## Royal Calebs International School
+
+---
+
+## 📋 Prerequisites
+
+Install these tools first (all platforms):
+
+| Tool | Version | Download |
+|------|---------|----------|
+| Flutter SDK | ≥ 3.22 | https://docs.flutter.dev/get-started/install |
+| Dart SDK | ≥ 3.0 | Included with Flutter |
+| Git | Any | https://git-scm.com |
+| VS Code or Android Studio | Any | For editing |
+
+Verify installation:
+```bash
+flutter doctor
+```
+All items should show ✓ (except platforms you don't need).
+
+---
+
+## 🚀 First-Time Project Setup
+
+```bash
+# 1. Enter project folder
+cd rcis_app
+
+# 2. Place your school logo
+#    Copy logo.png into the assets/ folder (minimum 1024×1024 PNG)
+
+# 3. Get dependencies
+flutter pub get
+
+# 4. Generate app icons from logo
+flutter pub run flutter_launcher_icons
+
+# 5. Generate native splash screen
+flutter pub run flutter_native_splash:create
+```
+
+---
+
+## 🔥 Firebase Setup (Required for Push Notifications)
+
+1. Go to https://console.firebase.google.com
+2. Create a new project named **RCIS**
+3. Install FlutterFire CLI:
+   ```bash
+   dart pub global activate flutterfire_cli
+   ```
+4. Run configuration (replaces firebase_options.dart automatically):
+   ```bash
+   flutterfire configure
+   ```
+5. Follow the prompts — select Android + iOS + (Web optional)
+6. Download **google-services.json** → place in `android/app/`
+7. Download **GoogleService-Info.plist** → place in `ios/Runner/`
+
+---
+
+## 🤖 Android APK Build
+
+### Requirements
+- Android Studio installed (for SDK & NDK)
+- Java 17+ (`java -version`)
+- Android SDK 21–34
+
+### Debug APK (for testing)
+```bash
+flutter build apk --debug
+```
+Output: `build/app/outputs/flutter-apk/app-debug.apk`
+
+### Release APK (for distribution)
+
+**Step 1 — Create a keystore** (one-time):
+```bash
+keytool -genkey -v \
+  -keystore ~/rcis-release-key.jks \
+  -keyalg RSA -keysize 2048 \
+  -validity 10000 \
+  -alias rcis
+```
+
+**Step 2 — Create `android/key.properties`:**
+```properties
+storePassword=YOUR_STORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=rcis
+storeFile=/absolute/path/to/rcis-release-key.jks
+```
+
+**Step 3 — Update `android/app/build.gradle`** — add before `android {`:
+```groovy
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+```
+And inside `android { buildTypes { release { ... } } }`:
+```groovy
+signingConfigs {
+    release {
+        keyAlias keystoreProperties['keyAlias']
+        keyPassword keystoreProperties['keyPassword']
+        storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+        storePassword keystoreProperties['storePassword']
+    }
+}
+buildTypes {
+    release {
+        signingConfig signingConfigs.release
+    }
+}
+```
+
+**Step 4 — Build:**
+```bash
+# Single fat APK
+flutter build apk --release
+
+# Split APKs by CPU (smaller, recommended for Play Store)
+flutter build apk --split-per-abi --release
+```
+
+Outputs:
+- `build/app/outputs/flutter-apk/app-release.apk`
+- `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` ← use this for most modern phones
+- `build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk`
+
+### App Bundle (for Play Store)
+```bash
+flutter build appbundle --release
+```
+Output: `build/app/outputs/bundle/release/app-release.aab`
+
+### Install directly on connected phone
+```bash
+flutter install
+```
+
+---
+
+## 🍎 iOS Build
+
+### Requirements
+- macOS only
+- Xcode 15+ (from App Store)
+- Apple Developer account (free = sideload only; $99/yr = App Store)
+- CocoaPods: `sudo gem install cocoapods`
+
+### Setup
+```bash
+cd ios
+pod install
+cd ..
+```
+
+### Debug (Simulator)
+```bash
+flutter build ios --debug --simulator
+flutter run
+```
+
+### Release (Real Device / Archive)
+```bash
+flutter build ios --release
+```
+
+Then in Xcode:
+1. Open `ios/Runner.xcworkspace`
+2. Select your Team under **Signing & Capabilities**
+3. Set Bundle ID to `com.rcis.app`
+4. Product → **Archive**
+5. Distribute via **Ad Hoc** (direct install) or **App Store Connect**
+
+### Install on device without App Store (TestFlight)
+1. Build → Archive in Xcode
+2. Upload to App Store Connect
+3. Add testers in TestFlight
+
+---
+
+## 🪟 Windows EXE Build
+
+### Requirements
+- Windows 10/11 only
+- Visual Studio 2022 with **Desktop development with C++** workload
+- Windows 10 SDK (10.0.18362+)
+
+### Enable Windows desktop
+```bash
+flutter config --enable-windows-desktop
+```
+
+### Build
+```bash
+flutter build windows --release
+```
+
+Output folder: `build/windows/x64/runner/Release/`
+
+Contents:
+```
+Release/
+  rcis_app.exe          ← main executable
+  flutter_windows.dll
+  data/
+  *.dll
+```
+
+### Create installer (optional — using Inno Setup)
+1. Download Inno Setup: https://jrsoftware.org/isdl.php
+2. Create `setup.iss`:
+```iss
+[Setup]
+AppName=RCIS
+AppVersion=1.0
+DefaultDirName={autopf}\RCIS
+DefaultGroupName=RCIS
+OutputBaseFilename=RCIS_Setup
+Compression=lzma
+SolidCompression=yes
+
+[Files]
+Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: recursesubdirs
+
+[Icons]
+Name: "{group}\RCIS"; Filename: "{app}\rcis_app.exe"
+Name: "{commondesktop}\RCIS"; Filename: "{app}\rcis_app.exe"
+
+[Run]
+Filename: "{app}\rcis_app.exe"; Description: "Launch RCIS"; Flags: nowait postinstall skipifsilent
+```
+3. Compile → produces `RCIS_Setup.exe`
+
+---
+
+## 📁 Project File Upload & Download Features
+
+The app supports:
+
+| Feature | Android | iOS | Windows |
+|---------|---------|-----|---------|
+| File download (PDF, DOC, images, etc.) | ✅ → Downloads/ | ✅ → Files app | ✅ → Downloads/ |
+| File upload via `<input type="file">` | ✅ Camera + Gallery + Files | ✅ Camera + Files | ✅ System picker |
+| Camera capture for upload | ✅ | ✅ | ✅ (if webcam) |
+| Multi-file upload | ✅ | ✅ | ✅ |
+| Download progress notification | ✅ | ✅ | ✅ |
+
+### How downloads work
+- Any link on the website ending in `.pdf`, `.docx`, `.xlsx`, `.zip`, `.jpg`, etc. is automatically intercepted
+- The app downloads the file in the background
+- A snackbar shows download progress and confirms save location
+- Files are saved to the device's **Downloads** folder (Android) or **Files app** (iOS)
+
+### How uploads work
+- Any `<input type="file">` on the website triggers the native file picker
+- Users can choose: Camera, Gallery, or Browse Files
+- Supports single and multiple file selection
+- Works for forms like admission applications, document submissions, etc.
+
+---
+
+## 🔧 Customization
+
+| What | Where |
+|------|-------|
+| School URL | `lib/screens/home_screen.dart` → `_url` constant |
+| App name | `pubspec.yaml` → `name` + `android/app/src/main/res/values/strings.xml` |
+| Bundle ID | `android/app/build.gradle` + `ios/Runner/Info.plist` |
+| App colors | `lib/main.dart` + `lib/screens/splash_screen.dart` |
+| App logo | Replace `assets/logo.png` (1024×1024 PNG), then re-run `flutter pub run flutter_launcher_icons` |
+| Splash background color | `pubspec.yaml` → `flutter_native_splash: color:` |
+
+---
+
+## 🐛 Common Errors
+
+| Error | Fix |
+|-------|-----|
+| `INTERNET permission denied` | Check AndroidManifest.xml has `<uses-permission android:name="android.permission.INTERNET"/>` |
+| `WebView not loading` | Run `flutter clean && flutter pub get` |
+| `Cocoapods error on iOS` | `cd ios && pod deintegrate && pod install` |
+| `Gradle build failed` | Ensure Java 17: `java -version`. Set in Android Studio → SDK Manager |
+| `Windows build error` | Run from **Developer Command Prompt for VS 2022** |
+| `firebase_options not found` | Run `flutterfire configure` to generate the file |
+| `File upload not working on Android` | Ensure `permission_handler` permissions are declared in AndroidManifest |
+
+---
+
+## 📞 Support
+
+For help with Flutter builds, visit:
+- https://docs.flutter.dev
+- https://pub.dev (search any package name)
+- https://firebase.google.com/docs/flutter/setup
